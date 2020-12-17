@@ -2,8 +2,8 @@
 title: 'Identifying and characterising social media communities: a socio-semantic network approach'
 author:
   - Wenceslao Arroyo-Machado
-  - Nicolas Robinson-Garcia
   - Daniel Torres-Salinas
+  - Nicolas Robinson-Garcia
 output:
   html_document:
     toc: true
