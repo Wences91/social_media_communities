@@ -7,7 +7,7 @@ This repository includes all data processing for the work "*Identifying and char
 * Nicolas Robinson-Garcia
 
 ## Data
-Datasets of Twitter mentions and publications in Information Science & Library Science and Microbiology are available at Zenodo (10.5281/zenodo.4148941).
+Datasets of Twitter mentions and publications in Information Science & Library Science and Microbiology are available at Zenodo ([10.5281/zenodo.4148941](https://doi.org/10.5281/zenodo.4148941)).
 
 ## R Notebook
 The entire data processing workflow is available in a R Notebook.
