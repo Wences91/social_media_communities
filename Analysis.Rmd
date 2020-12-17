@@ -1,0 +1,432 @@
+---
+title: 'Identifying and characterising social media communities: a socio-semantic network approach'
+author:
+  - Wenceslao Arroyo-Machado
+  - Nicolas Robinson-Garcia
+  - Daniel Torres-Salinas
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+---
+
+# Preamble
+The following libraries need to be installed and loaded. The bulk of the analysis is carried out using the functions of the library [`altanalysis`](https://github.com/Wences91/altanalysis), which has been created specifically for this purpose.
+
+```{r setup}
+set.seed(1999)
+
+#library(devtools)
+#install_github('Wences91/altanalysis')
+library(altanalysis)
+library(zoo)
+library(ggplot2)
+library(UpSetR)
+```
+
+
+The proposed methodology has been applied on two different data sets. On the one hand the publications related to the area *Information Science & Library Science* and on the other hand those of *Biotechnology and Applied Biochemistry* and *Microbiology*.
+
+
+# Information Science & Library Science
+First, we import the records of scientific publications from the *Information Science & Library Science* area published between 2012 and 2018 collected at InCites, the mentions of these publications available at Altmetric.com as of July 2019 and the list of tweets from Altmetric.com that are tweets or retweets obtained between December 2019 and January 2020. There are a total of 14,475 publications mentioned at least once by a Altmetric.com source, out of the 84,568 listed on InCites, with 167,110 mentions made to them. Of all the mentions, 151,505 are from Twitter, with 150,806 unique tweets.
+
+```{r}
+# Incites
+inf_wos <- read.csv2('data/Information Science & Library Science/WoS.csv',
+                     stringsAsFactors = FALSE,
+                     check.names = FALSE,
+                     encoding = 'UTF-8',
+                     na.strings = 'n/a')
+
+# Altmetric.com mentions
+inf_mentions <- read.csv2('data/Information Science & Library Science/Mentions.csv',
+                          stringsAsFactors = FALSE,
+                          check.names = FALSE,
+                          encoding = 'UTF-8')
+
+# Mentions stats
+altanalysis::mentions_stats(inf_mentions)
+
+# Publications
+length(unique(inf_mentions$`Details Page URL`))
+
+# Twitter mentions
+length(unique(inf_mentions$`Mention URL`[which(inf_mentions$`Mention Type`=='Tweet')]))
+
+# Tweets and retweets
+inf_retweets <- read.delim('data/retweets/IS/retuits.tsv',
+                           stringsAsFactors = FALSE,
+                           check.names = FALSE,
+                           na.strings = NA)
+```
+
+
+Through the function `almetric_wos_mentions` the mentions of Altmetric.com are filtered to reduce them to only the tweets, excluding the retweets. In addition, these are also combined with the data from InCites. So, of the total number of unique tweets, 78,535 (52.08%) are retweets, 65,972 (43.74%) are tweets and 6299 (4.18%) could not be identified because they had been removed at the time of the query. Also, in this process, 18 cases of duplicate DOIs have been detected, which have been eliminated, 188 mentions that did not have the user name have had to be corrected and there are 298 tweets that mention more than one publication. This leaves a total of 66,231 tweet mentions (65,933 unique tweets) to 13,227 publications.
+
+```{r}
+# Tweets and retweets
+table(inf_retweets$Retweet)
+# Unknown
+sum(is.na(inf_retweets$Retweet))
+
+inf_awm <- altanalysis::altmetric_wos_mentions(inf_mentions, inf_wos, filter='Tweet', only_tweets = TRUE, retweets = inf_retweets)
+
+# Publications
+length(unique(inf_awm$`Accession Number`))
+# Unique tweets
+length(unique(inf_awm$`Mention URL`))
+```
+
+
+## Stats
+Using the set of mentions obtained above, a statistical analysis of these mentions is carried out. On the one hand, with the `mentions_stats` function we have that out of the total of 66,231 tweets, 13,229 unique publications are mentioned. In addition, these mentions come from 23,718 unique Twitter accounts, which make an average of 2.792 tweets ($\pm$13.99).
+
+```{r}
+altanalysis::mentions_stats(inf_awm)
+
+# Actors
+length(unique(inf_awm$`Outlet or Author`))
+# Mentions average
+round(mean(as.integer(table(inf_awm$`Outlet or Author`))), 3)
+# Mentions sd
+round(sd(as.integer(table(inf_awm$`Outlet or Author`))), 3)
+```
+
+
+On the other hand, there is a progressive growth of tweets, being the first one in 2011, with a significant decrease in the number of mentions in 2019. It should be recalled that the scientific publications mentioned have been published between 2012 and 2018.
+
+```{r}
+inf_date_evolution <- substr(inf_awm$`Mention Date`, 1, 10)
+inf_date_evolution <- zoo::as.Date(zoo::as.yearmon(inf_date_evolution))
+inf_date_evolution <- as.data.frame(table(inf_date_evolution), stringsAsFactors = F)
+inf_date_evolution$date_evolution <- as.Date(inf_date_evolution$inf_date_evolution, format = '%Y-%m-%d')
+
+ggplot2::ggplot(data = inf_date_evolution, ggplot2::aes(x=date_evolution, y=Freq)) +
+  ggplot2::geom_line() +
+  ggplot2::scale_x_date(date_breaks = '1 year', date_labels = '%Y') +
+  ggplot2::labs(x = 'Mention date', y = 'Tweets') +
+  ggplot2::theme_minimal()
+```
+
+
+The most mentioned works are *Open access: The true cost of science publishing* (2013) with 1046 tweets, *The Oligopoly of Academic Publishers in the Digital Era* (2015) with 808, and *Bibliometrics: The Leiden Manifesto for research metrics* (2015) with 770.
+
+```{r}
+sort(table(inf_awm$`Research Output Title`), decreasing = T)[1:5]
+```
+
+
+##  WoS Keywords
+For all the works mentioned in Altmetric.com, their respective Web of Science records have been recovered, with a total of 13,227. After this, the author keywords for each one have been extracted using the `almetric_keywords` function, although 4050 records (30.62%) do not have this field. Likewise, the 743 publications from the *QUALITATIVE HEALTH RESEARCH* magazine have been omitted, as they do not strictly belong to this area, and the keyword 0 has also been eliminated. In total we have 44,421 keywords, of which 20,027 are unique and 35,411 are mentioned in all of them.
+
+```{r}
+# Load WoS records
+inf_web_of_science <- altanalysis::wos_read('data/WOS_IS')
+# Empty keywords
+sum(inf_web_of_science$DE == '')
+
+# QUALITATIVE HEALTH RESEARCH publications
+sum(inf_web_of_science$SO == 'QUALITATIVE HEALTH RESEARCH')
+
+inf_wos_keywords <- altanalysis::altmetric_keywords(inf_awm, inf_web_of_science, remove_journals = 'QUALITATIVE HEALTH RESEARCH', wrong_words = '0')
+
+# Unique keywords
+length(unique(inf_wos_keywords$keywords$keyword))
+# Mentions
+dim(unique(inf_wos_keywords$mentions[,-2]))[1]
+```
+
+
+Thus the final sample is 8452 publications, which receive 35,411 Twitter mentions (35,336 unique tweets).
+
+```{r}
+# Publications
+length(unique(inf_wos_keywords$mentions$id))
+# Mentions
+dim(unique(inf_wos_keywords$mentions[,-2]))[1]
+# Tweets
+length(unique(inf_wos_keywords$mentions$`Mention URL`))
+
+# Document type
+table(inf_wos$`Document Type`[which(inf_wos$`Accession Number` %in% unique(inf_wos_keywords$mentions$id))])
+
+inf_wos_mentions <- dplyr::inner_join(unique(inf_wos_keywords$mentions[,-2]), inf_wos, by=c('id'='Accession Number'))
+# Mentions document type
+table(inf_wos_mentions$`Document Type`)
+
+inf_authors <- as.data.frame(table(unique(inf_wos_keywords$mentions[,c('Outlet or Author','id')])$`Outlet or Author`))
+# Average of publications mentioned
+round(mean(inf_authors$Freq), 3)
+# Sd of publications mentioned
+round(sd(inf_authors$Freq), 3)
+
+inf_authors_keywords <- as.data.frame(table(unique(inf_wos_keywords$mentions[,c('Outlet or Author','keyword')])$`Outlet or Author`))
+# Average of keywords mentioned
+round(mean(inf_authors_keywords$Freq), 3)
+# Sd of keywords mentioned
+round(sd(inf_authors_keywords$Freq), 3)
+```
+
+
+## Co-keywords and profiles
+After that, the keyword co-occurrence network has been generated with the function `co_keywords_network`, which has been filtered to a minimum of 3 co-occurrences and once generated it has been taken to Gephi. In this last software the network has been filtered to its main component and detected communities using Louvain's algorithm and a resolution value of 2.0 (Q=0.618). In total, four communities have been detected that respond to the following topics: social media, bibliometrics, libraries and information retrieval. The tweets that mention some of the publications included in these clusters are 28,831 (43.53%). 
+
+```{r}
+inf_co_kn <- altanalysis::co_keywords_network(inf_wos_keywords$keywords, inf_wos_keywords$mentions, min_co = 3)
+
+#write.csv2(inf_co_kn$edges, 'IS_edges.csv', row.names = F)
+#write.csv2(inf_co_kn$nodes, 'IS_nodes.csv', row.names = F)
+
+inf_words_clusters <- read.csv2('Network-IS.csv',
+                          stringsAsFactors = FALSE,
+                          check.names = FALSE)
+
+names(inf_words_clusters)[3] <- 'cluster'
+
+# Publications
+sum(inf_awm$`Accession Number` %in% inf_wos_keywords$keywords$id[which(inf_wos_keywords$keywords$keyword %in% inf_words_clusters$Id)])
+
+# Actors
+length(unique(inf_wos_keywords$mentions$`Outlet or Author`[which(inf_wos_keywords$mentions$keyword %in% inf_words_clusters$Id)]))
+```
+
+
+From the keywords mentioned by each Twitter user, each one associated to a community, the different thematic user profiles have been built with the 'profiles' function. In general, those that only mention keywords from a single community stand out: 2427 Twitter users in social media (22.08%), 2206 in bibliometrics (20.07%) and 1395 in information retrieval (12.69%). However, ahead of those referring exclusively to libraries, 567 users (5.16%), are those who jointly mention social media and bibliometrics with 1017 users (9.25%). All of this takes into account the mentions of raw keywords, but there are differences when taking into account the percentage distribution. Thus, as the percentage required to associate an account to a community grows, mixed profiles decrease, although in the case of social media and bibliometrics profiles there are minimal differences, and the four main communities increase, especially in bibliometrics (an increase of 20.17%).
+
+```{r}
+inf_legend <- c('Social media', 'Bibliometrics', 'Libraries', 'Information retrieval')
+
+inf_profiles <- altanalysis::profiles(inf_words_clusters, inf_legend, inf_wos_keywords)
+
+# General
+inf_profiles$general
+# 5%
+inf_profiles$p5
+# 10%
+inf_profiles$p10
+# 15%
+inf_profiles$p15
+# 20%
+inf_profiles$p20
+```
+
+
+Since there are a reduced number of well-defined communities, a network has been generated that visualizes the overlap between the semantic and the social network. For that purpose, the co-occurrence relations of actors with `co_authors_network` are created, filtering those with a minimum of 12 co-occurrences. After that, the network is made with `co_authors_network`, coloring the nodes according to the semantic clusters and the cloud with the clusters of actors.
+
+```{r}
+inf_words_clusters$cluster <- inf_words_clusters$cluster+1
+
+inf_co_an <- altanalysis::co_authors_network(inf_words_clusters, inf_wos_keywords$mentions, min_co=12)
+
+#png('Figures/IS_socio_semantic.png', width = 3000, height = 3000, res = 400)
+altanalysis::socio_semantic_network(inf_co_an$edges, inf_co_an$keywords_mentions_cluster,  mode=1, layout=5, legend = inf_legend, nodes_size = c(2, 6), label_ratio = 0.035)
+#dev.off()
+```
+
+
+# Microbiology
+On the other hand, the records of the *Biotechnology and Applied Biochemistry* and *Microbiology* areas published between 2012 and 2018 collected in InCites, the mentions to these publications available in Altmetric.com as of July 2019 and the list of tweets of Altmetric.com that are tweets or retweets obtained between December 2019 and January 2020 are imported. During this process the records of both areas have been unified, eliminating duplicates, and some minor bugs have also been corrected. There are a total of 192,836 publications mentioned at least once by a source Altmetric.com, of the 413,910 collected in InCites, with 1,876,599 mentions made to them. Of all the mentions, 1,599,315 are from Twitter, with 1,585,313 unique tweets.
+
+```{r}
+# Incites
+bio_wos <- read.csv2('data/Biotechnology and Applied Biochemistry/WoS.csv',
+                     stringsAsFactors = FALSE,
+                     check.names = FALSE,
+                     encoding = 'UTF-8',
+                     na.strings = 'n/a')
+
+mic_wos <- read.csv2('data/Microbiology/WoS.csv',
+                     stringsAsFactors = FALSE,
+                     check.names = FALSE,
+                     encoding = 'UTF-8',
+                     na.strings = 'n/a')
+
+mic_wos <- unique(rbind.data.frame(bio_wos[,-c(15:20)], mic_wos[,-c(15:20)], stringsAsFactors = FALSE))
+
+mic_wos$DOI[which(mic_wos$DOI == '10.1016/j.ymthe.2017.10.004.')] <- '10.1016/j.ymthe.2017.10.004'
+mic_wos$DOI[which(mic_wos$DOI == '10.1016/j.ymthe.2017.09.007.')] <- '10.1016/j.ymthe.2017.09.007'
+mic_wos$DOI[which(mic_wos$DOI == '10.1128/AAC.01017-16.')] <- '10.1128/aac.01017-16'
+mic_wos$DOI[which(mic_wos$DOI == '10.1128/AAC.01224-16.')] <- '10.1128/aac.01224-16'
+mic_wos$DOI[which(mic_wos$DOI == '10.1128/AAC.00673-16.')] <- '10.1128/aac.00673-16'
+mic_wos$DOI[which(mic_wos$DOI == '10.1128/AAC.00686-16.')] <- '10.1128/aac.00686-16'
+mic_wos$DOI[which(mic_wos$DOI == '10.1128/AAC.01367-16.')] <- '10.1128/aac.01367-16'
+mic_wos$DOI[which(mic_wos$DOI == '10.1128/AAC.00984-16.')] <- '10.1128/aac.00984-16'
+
+# Altmetric.com mentions
+bio_mentions <- read.csv2('data/Biotechnology and Applied Biochemistry/Mentions.csv',
+                          stringsAsFactors = FALSE,
+                          check.names = FALSE,
+                          encoding = 'UTF-8')
+
+# Mentions stats
+altanalysis::mentions_stats(bio_mentions)
+# Publications
+length(unique(bio_mentions$`Details Page URL`))
+
+mic_mentions <- read.csv2('data/Microbiology/Mentions.csv',
+                          stringsAsFactors = FALSE,
+                          check.names = FALSE,
+                          encoding = 'UTF-8')
+
+# Mentions stats
+altanalysis::mentions_stats(mic_mentions)
+# Publications
+length(unique(mic_mentions$`Details Page URL`))
+
+mic_mentions <- unique(rbind.data.frame(bio_mentions, mic_mentions, stringsAsFactors = FALSE))
+
+# Mentions stats
+altanalysis::mentions_stats(mic_mentions)
+# Publications
+length(unique(mic_mentions$`Details Page URL`))
+# Twitter mentions
+length(unique(mic_mentions$`Mention URL`[which(mic_mentions$`Mention Type`=='Tweet')]))
+
+# Tweets and retweets
+mic_retweets <- read.delim('data/retweets/Microbiology/retuits.tsv',
+                           stringsAsFactors = FALSE,
+                           check.names = FALSE,
+                           na.strings = NA)
+```
+
+
+Through the function `almetric_wos_mentions` the mentions of Altmetric.com are filtered to reduce them to only the tweets, excluding the retweets. In addition, these are also combined with the data from InCites. Thus, of the total number of unique tweets, 827,462 (52.14%) are retweets, 696,816 (44.02%) are tweets and 61,035 (4.18%) could not be identified as they had been removed at the time of the query. Also, in this process 190 cases of duplicate DOIs have been detected, which have been eliminated, 1119 mentions that did not have the user name have had to be corrected and there are 4078 tweets in which more than one publication is mentioned. This leaves a total of 699,507 tweet mentions (695,429 unique tweets) to 171,085 publications.
+
+```{r}
+# Tweets and retweets
+table(mic_retweets$Retweet)
+# Unknown
+sum(is.na(mic_retweets$Retweet))
+
+mic_awm <- altanalysis::altmetric_wos_mentions(mic_mentions, mic_wos, filter='Tweet', only_tweets = TRUE, retweets = mic_retweets)
+
+# Publications
+length(unique(mic_awm$`Accession Number`))
+# Unique tweets
+length(unique(mic_awm$`Mention URL`))
+```
+
+
+## Stats
+Using the set of mentions obtained above, a statistical analysis of these mentions is carried out. On the one hand, with the `mentions_stats` function we have a total of 699,507 tweets, of which 171,092 are unique mentions. That's a total of 93,626 Twitter accounts, which make an average of 7.471 tweets ($\pm$88.625).
+
+```{r}
+altanalysis::mentions_stats(mic_awm)
+
+# Actors
+length(unique(mic_awm$`Outlet or Author`))
+# Mentions average
+round(mean(as.integer(table(mic_awm$`Outlet or Author`))), 3)
+# Mentions sd
+round(sd(as.integer(table(mic_awm$`Outlet or Author`))), 3)
+```
+
+
+On the other hand, we can see a progressive growth of the tweets, being the first one in 2011, with the mentions decreasing notably in 2019. Again, it is worth remembering that the scientific publications mentioned have been published between 2012 and 2018.
+
+```{r}
+mic_date_evolution <- substr(mic_awm$`Mention Date`, 1, 10)
+mic_date_evolution <- zoo::as.Date(zoo::as.yearmon(mic_date_evolution))
+mic_date_evolution <- as.data.frame(table(mic_date_evolution), stringsAsFactors = F)
+mic_date_evolution$date_evolution <- as.Date(mic_date_evolution$mic_date_evolution, format = '%Y-%m-%d')
+
+ggplot2::ggplot(data = mic_date_evolution, ggplot2::aes(x=date_evolution, y=Freq)) +
+  ggplot2::geom_line() +
+  ggplot2::scale_x_date(date_breaks = '1 year', date_labels = '%Y') +
+  ggplot2::labs(x = 'Mention date', y = 'Tweets') +
+  ggplot2::theme_minimal()
+```
+
+
+The most mentioned works are *Discovery and resupply of pharmacologically active plant-derived natural products: A review* (2015) with 4077 tweets, *The Effect of Glyphosate on Potential Pathogens and Beneficial Members of Poultry Microbiota In Vitro* (2012) with 3856, and *Triple-negative breast cancer risk in women is defined by the defect of estrogen signaling: preventive and therapeutic implications* (2014) with 1664.
+
+```{r}
+sort(table(mic_awm$`Research Output Title`), decreasing = T)[1:5]
+```
+
+
+##  WoS Keywords
+For all the works mentioned in Altmetric.com, their respective Web of Science records have been recovered, with a total of 171,585. After this, the author keywords for each one have been extracted using the `almetric_keywords` function, although 70,107 records (40.86%) do not have this field. In this case no journals have been omitted, but the keyword 0 has been removed again. In total we have 540,227 keywords, of which 163,674 are unique, and 328,110 mentions all of them.
+
+```{r}
+# Load WoS records
+mic_web_of_science <- altanalysis::wos_read('data/WOS_MI')
+mic_web_of_science <- unique(mic_web_of_science)
+# Empty keywords
+sum(mic_web_of_science$DE == '')
+
+mic_wos_keywords <- altanalysis::altmetric_keywords(mic_awm, mic_web_of_science, wrong_words = '0')
+
+# Unique keywords
+length(unique(mic_wos_keywords$keywords$keyword))
+# Mentions
+dim(unique(mic_wos_keywords$mentions[,-2]))[1]
+```
+
+
+Thus the final sample is 101,206 publications, which receive 328,110 Twitter mentions (327,449 unique tweets).
+
+```{r}
+length(unique(mic_wos_keywords$mentions$id))
+dim(unique(mic_wos_keywords$mentions[,-2]))[1]
+length(unique(mic_wos_keywords$mentions$`Mention URL`))
+
+table(mic_wos$`Document Type`[which(mic_wos$`Accession Number` %in% unique(mic_wos_keywords$mentions$id))])
+mic_wos_mentions <- dplyr::inner_join(unique(mic_wos_keywords$mentions[,-2]), mic_wos, by=c('id'='Accession Number'))
+table(mic_wos_mentions$`Document Type`)
+
+mic_authors <- as.data.frame(table(unique(mic_wos_keywords$mentions[,c('Outlet or Author','id')])$`Outlet or Author`))
+round(mean(mic_authors$Freq), 3)
+round(sd(mic_authors$Freq), 3)
+
+mic_authors_keywords <- as.data.frame(table(unique(mic_wos_keywords$mentions[,c('Outlet or Author','keyword')])$`Outlet or Author`))
+round(mean(mic_authors_keywords$Freq), 3)
+round(sd(mic_authors_keywords$Freq), 3)
+```
+
+
+## Co-keywords and profiles
+After that, the keyword co-occurrence network has been generated with the function `co_keywords_network`, which has been taken to Gephi. In this last software it has been filtered to a minimum of 5 co-occurrences and 50 occurrences has been filtered, obtained its main component and detected communities using Louvain's algorithm and a resolution value of 2.0 (Q=0.591). In total, six communities have been detected that respond to the following topics: Omics and Phylogenic Classification, Immunology and Viral Diseases, Bioengineering, Bacteria, Stem Cell Development and Tick transmitted diseases. The tweets that mention some of the publications included in these clusters are 286,323 (40.93%).
+
+```{r}
+mic_co_kn <- altanalysis::co_keywords_network(mic_wos_keywords$keywords, mic_wos_keywords$mentions, min_co = 1)
+
+#write.csv2(mic_co_kn$edges, 'MIC_edges.csv', row.names = F)
+#write.csv2(mic_co_kn$nodes, 'MIC_nodes.csv', row.names = F)
+
+mic_words_clusters <- read.csv2('Network-MIC.csv',
+                          stringsAsFactors = FALSE,
+                          check.names = FALSE)
+
+names(mic_words_clusters)[3] <- 'cluster'
+
+# Publications
+sum(mic_awm$`Accession Number` %in% mic_wos_keywords$keywords$id[which(mic_wos_keywords$keywords$keyword %in% mic_words_clusters$Id)])
+
+# Actors
+length(unique(mic_wos_keywords$mentions$`Outlet or Author`[which(mic_wos_keywords$mentions$keyword %in% mic_words_clusters$Id)]))
+```
+
+
+From the keywords mentioned by each Twitter user, each one associated to a community, the different thematic user profiles have been built with the `profiles` function. In general, those that only mention keywords from a single community stand out: 7909 in omics and phylogenic classification (16.44%), 3666 in bacteria (7.62%), 3309 in immunology and viral diseases (6.88%), 1920 in bioengineering (3.99%), 1297 in stem cell development (2.7%), and 104 in tick transmitted diseases (0.22%). Again, taking into account the percentage distribution, mixed profiles decrease and the main ones increase as the required percentage increases, although this is not the case for bacteria and omics and phylogenic classification, as well as for immunology and viral diseases and bacteria or bioengineering and omics and phylogenic classification.
+
+```{r}
+mic_legend <- c('Omics and Phylogenic Classification', 'Immunology and Viral Diseases', 'Bioengineering', 'Bacteria', 'Stem Cell Development', 'Tick transmitted diseases')
+
+mic_profiles <- altanalysis::profiles(mic_words_clusters, mic_legend, mic_wos_keywords, nintersects = 35)
+
+# General
+mic_profiles$general
+# 5%
+mic_profiles$p5
+# 10%
+mic_profiles$p10
+# 15%
+mic_profiles$p15
+# 20%
+mic_profiles$p20
+
+```
+
