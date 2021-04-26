@@ -4,7 +4,7 @@ This repository includes all data processing for the work "*Identifying and char
 ## Authors
 * Wenceslao Arroyo-Machado
 * Daniel Torres-Salinas
-* Nicolas Robinson-Garcia
+* Nicolás Robinson-García
 
 ## Data
 Datasets of Twitter mentions and publications in Information Science & Library Science and Microbiology are available at Zenodo ([10.5281/zenodo.4148941](https://doi.org/10.5281/zenodo.4148941)).
