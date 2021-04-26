@@ -1,5 +1,5 @@
 # Overview
-This repository includes all data processing for the work "*Identifying and characterizing social media communities: a socio-semantic network approach*".
+This repository includes all data processing for the work "*Identifying and characterizing social media communities: a socio-semantic network approach to altmetrics*".
 
 ## Authors
 * Wenceslao Arroyo-Machado
@@ -13,4 +13,4 @@ Datasets of Twitter mentions and publications in Information Science & Library S
 The entire data processing workflow is available in a R Notebook.
 
 ## Acknowledgements
-The  authors  are  grateful  to  Lydia  Robinson-Garcia  from  the  CeMMResearch  Center  for  Molecular Medicine of the Austrian Academy of Sciences for assessing on the description and interpretation of the Microbiology semantic map. Wenceslao Arroyo-Machado has a FPU Grant (FPU18/05835) from the Spanish Ministry of Universities. Daniel Torres-Salinas has received funding from the University of Granada’s “Plan Propio de Investigación y Transferencia” under the “Reincorporación de Jóvenes Doctores” grant. Nicolas Robinson-Garcia was supported by the European Union’s Horizon 2020 research and innovation programme under the Marie Skłodowska-Curie grant agreement No 707404. The authors declare no competing interests. 
+The authors are grateful to Lydia Robinson-García of the CeMM Research Center for Molecular Medicine of the Austrian Academy of Sciences for assessing our description and interpretation of the Microbiology semantic map. Wenceslao Arroyo-Machado has an FPU Grant (FPU18/05835) from the Spanish Ministry of Universities. Daniel Torres-Salinas has been financed by the University of Granada Research and Knowledge Transfer Fund’s Programme for the Incorporation of Early Researchers. Nicolas Robinson-Garcia is currently supported by a Ramón y Cajal grant from the Spanish Ministry of Science. The authors declare no competing interests. This work has been possible thanks to financial support from “InfuScience - Scientists with social infuence: a model to measure knowledge transfer in the digital society” (PID2019-109127RB-I00 / SRA / 10.13039/501100011033), a project funded by the Ministry of Science and Innovation of Spain.
